@@ -11,19 +11,19 @@ Works with **GitHub Copilot** (VS Code) and **Claude** (Claude Code / Claude Des
 ### macOS
 ```bash
 curl -fsSL -o agentkit \
-  https://github.com/JkhatriInfobox/agents/releases/latest/download/agentkit-macos-arm64 \
+  https://github.com/JkhatriInfobox/agentkit/releases/latest/download/agentkit-macos-arm64 \
   && chmod +x agentkit && sudo mv agentkit /usr/local/bin/
 ```
 
 ### Linux
 ```bash
 curl -fsSL -o agentkit \
-  https://github.com/JkhatriInfobox/agents/releases/latest/download/agentkit-linux-amd64 \
+  https://github.com/JkhatriInfobox/agentkit/releases/latest/download/agentkit-linux-amd64 \
   && chmod +x agentkit && sudo mv agentkit /usr/local/bin/
 ```
 
 ### Windows
-Download [`agentkit-windows-amd64.exe`](https://github.com/JkhatriInfobox/agents/releases/latest) from the latest release and add it to your PATH.
+Download [`agentkit-windows-amd64.exe`](https://github.com/JkhatriInfobox/agentkit/releases/latest) from the latest release and add it to your PATH.
 
 > No Python or pip required. The binary is self-contained.
 
@@ -542,6 +542,6 @@ Binaries are published for every release:
 - `agentkit-linux-amd64` — Linux x86_64
 - `agentkit-windows-amd64.exe` — Windows x86_64
 
-See [Releases](https://github.com/JkhatriInfobox/agents/releases) for all versions.
+See [Releases](https://github.com/JkhatriInfobox/agentkit/releases) for all versions.
 
-**Latest: [v0.1.7](https://github.com/JkhatriInfobox/agents/releases/tag/v0.1.7)** — Pack-first install + all 5 domain packs + JIRA integration
+**Latest: [v0.1.8](https://github.com/JkhatriInfobox/agentkit/releases/tag/v0.1.8)** — JIRA integration pack, `agentkit migrate` command, pre-push CI hook
