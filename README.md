@@ -45,8 +45,7 @@ agentkit init
 # Or install a domain pack — core is included automatically
 agentkit init --pack go-development
 agentkit init --pack terraform-provider
-agentkit init --pack ansible-collection
-agentkit init --pack python-automation
+agentkit init --pack jira-integration
 
 # Verify everything installed cleanly
 agentkit doctor
@@ -70,9 +69,107 @@ agentkit init --pack <name>
 | `terraform-provider` | Terraform provider development | provider-dev, resource, data-source, docs, acceptance-testing, advanced-types, provider-client | terraform-fmt |
 | `ansible-collection` | Ansible modules, plugins, collections | foundation, modules, module-utils, lookup, filter, callback, inventory, integration-testing, docs, maintenance, regression-audit | ansible-lint, yaml-lint |
 | `python-automation` | Python scripts, CLIs, automation tools | scripting, testing | coverage-check, lint-gate, diff-size-guard |
+| `jira-integration` | JIRA ticket management, creation, updates, time logging | foundation, ticket-read, ticket-create, ticket-update, comment-management, time-tracking, custom-fields | secret-guard |
 | `oss-maintenance` | Open-source project maintenance | oss-specific skills | — |
 
 Each pack automatically includes `core` (developer, reviewer, architect, docs-writer, hooks, prompts). You do not need to install core separately.
+
+---
+
+## JIRA Integration
+
+The `jira-integration` pack adds a governed JIRA agent to your project with a strict **read-free / write-gated** permission model.
+
+### Setup
+
+```bash
+# 1. Install the pack
+agentkit init --pack jira-integration
+
+# 2. Edit .ai/jira-config.yaml (created automatically)
+#    Set base_url and email
+
+# 3. Set your API token (never put this in a file)
+export JIRA_API_TOKEN=your_token_here
+# Get your token at: https://id.atlassian.com/manage-profile/security/api-tokens
+
+# 4. Open VS Code → select [jira-agent] from the Agent dropdown
+```
+
+### What the JIRA agent can do
+
+| Operation | Permission required? |
+|-----------|---------------------|
+| Search issues with JQL | ❌ No — proceed freely |
+| Read issue details, comments, worklogs | ❌ No — proceed freely |
+| Discover custom fields | ❌ No — proceed freely |
+| Create issue | ✅ Yes — shows payload, asks approval |
+| Update fields, labels, priority | ✅ Yes — shows diff, asks approval |
+| Transition status | ✅ Yes — shows current → new, asks approval |
+| Add/reply to comment | ✅ Yes — shows preview, asks approval |
+| Log work time | ✅ Yes — shows time + date, asks approval |
+
+### Example interactions
+
+```
+# Read a ticket
+[jira-agent] Show me PROJ-123 with full context for development
+
+# Search
+[jira-agent] Find all open bugs in the auth service assigned to me
+
+# Create a developer-ready ticket
+[jira-agent] Create a story for adding JWT refresh token rotation to the auth service
+
+# Start work on a ticket
+[jira-agent] Load PROJ-456 context and hand off to developer
+
+# Update and log
+[jira-agent] Move PROJ-123 to In Review and post a comment that the PR is ready
+[jira-agent] Log 2h 30m on PROJ-123 for implementing the refresh token logic
+
+# Custom fields
+[jira-agent] What custom fields does our project use? Show values from PROJ-1
+[jira-agent] Set story points on PROJ-123 to 5
+```
+
+### Custom fields
+
+On first use, the agent can discover all custom fields in your JIRA project:
+
+```
+[jira-agent] Discover custom fields on PROJ-1 and help me map them to config
+```
+
+The agent fetches all fields, shows which ones have values, and asks which you want to map. Approved mappings are saved to `.ai/jira-config.yaml`:
+
+```yaml
+jira:
+  base_url: https://your-org.atlassian.net
+  email: you@example.com
+  default_project: PROJ
+  custom_fields:
+    story_points: customfield_10016
+    sprint: customfield_10020
+    acceptance_criteria: customfield_10034
+```
+
+### Developer handoff workflow
+
+```
+1. [jira-agent]  Load PROJ-123 — formats full ticket context (description, ACs, comments, epic)
+2. [jira-agent]  Hand off to developer
+3. [developer]   Implement the work
+4. [jira-agent]  Move to In Review + post comment   (asks approval)
+5. [jira-agent]  Log 3h work time                  (asks approval)
+6. [reviewer]    Review the diff
+7. [jira-agent]  Move to Done                       (asks approval)
+```
+
+### Two agents installed
+
+- **`jira-agent`** — full operations: read + write (with approval gate)
+- **`jira-reader`** — read-only: search, view tickets, check worklogs, discover fields — no approval prompts ever
 
 ---
 
@@ -109,7 +206,7 @@ AGENTS.md          ← Always-on Python dev conventions
   repository/      ← Auto-generated project intelligence
 ```
 
-Domain packs additionally install agent variants (e.g. `developer.agent.md` with Go/Terraform knowledge injected) and domain skills under `.github/skills/`.
+Domain packs additionally install agent variants and domain skills under `.github/skills/`. The `jira-integration` pack also installs `.ai/jira-config.yaml`.
 
 ---
 
@@ -123,6 +220,8 @@ Select an agent from the `[Agent ▼]` dropdown in VS Code Copilot chat, or use 
 | `reviewer` | Review code — finds real bugs, never style issues | Read + Search + Execute |
 | `architect` | Design systems, write ADRs, evaluate trade-offs | Read only (proposes, never implements) |
 | `docs-writer` | Write README, API docs, changelogs | Read + Write |
+| `jira-agent` | Full JIRA operations — writes require approval | Read + HTTP (write-gated) |
+| `jira-reader` | Read JIRA issues and search — no write, no approvals | Read + HTTP |
 | `oss-maintainer` | Issue triage, community responses, release notes | Read + Write |
 | `oss-triager` | Classify and route incoming issues | Read only |
 | `release-manager` | Changelog, version bump, tag, publish | Read + Write + Execute |
@@ -136,9 +235,9 @@ Select an agent from the `[Agent ▼]` dropdown in VS Code Copilot chat, or use 
 
 ### How to use agents in Claude Code
 ```
+[jira-agent] Show me PROJ-123 and format it for development
 [developer] Add input validation to the login endpoint
 [reviewer] Review my changes in src/api.py
-[architect] Design a caching strategy for the user service
 ```
 
 ---
@@ -180,8 +279,7 @@ Install agents and supporting files into your project.
 agentkit init                              # install core bundle (default)
 agentkit init --pack go-development        # install Go domain pack (includes core)
 agentkit init --pack terraform-provider    # install Terraform domain pack
-agentkit init --pack ansible-collection    # install Ansible domain pack
-agentkit init --pack python-automation     # install Python domain pack
+agentkit init --pack jira-integration      # install JIRA integration pack
 agentkit init --bundle core,testing        # install specific bundles
 agentkit init --force                      # overwrite locally modified files
 agentkit init --user                       # install to user profile (~/.agentkit/)
@@ -210,21 +308,6 @@ Show all available domain packs and bundles.
 
 ```bash
 agentkit list
-```
-
-Output:
-```
-Domain Packs (install with --pack):
-  go-development      Go services, CLIs, scripts
-  terraform-provider  Terraform provider development
-  ansible-collection  Ansible modules, plugins, collections
-  python-automation   Python scripts, CLIs, automation tools
-  oss-maintenance     Open-source project maintenance
-
-Utility Bundles (install with --bundle):
-  core        developer, reviewer, architect, docs-writer
-  testing     test-runner + pytest skill
-  ...
 ```
 
 ### `agentkit intel`
@@ -332,22 +415,19 @@ If you prefer per-repo ignoring, append the same block to the project's `.gitign
 # 1. One-time: set up global gitignore (see above)
 git config --global core.excludesfile ~/.gitignore_global
 
-# 2. New Go project setup
+# 2. New project with JIRA + Go
 cd ~/my-go-project
 agentkit init --pack go-development
+agentkit init --pack jira-integration
+export JIRA_API_TOKEN=your_token
 
-# 3. New Terraform provider project
-cd ~/my-tf-provider
-agentkit init --pack terraform-provider
+# 3. Daily: load a JIRA ticket and start work
+# [jira-agent] Show PROJ-123 and hand off to developer
+# [developer]  <implements the work>
+# [jira-agent] Move PROJ-123 to In Review and log 3h
 
-# 4. Daily use — open VS Code, select [developer] agent, start coding
-# Agents are in .github/agents/ — Copilot picks them up automatically
-
-# 5. When new agentkit version is released
+# 4. When new agentkit version is released
 agentkit sync
-
-# 6. After git clean or if something looks wrong
-agentkit doctor
 ```
 
 ---
@@ -362,6 +442,9 @@ No. The binary is fully self-contained.
 
 **Does this modify my `.gitignore`?**
 No. agentkit never touches your `.gitignore`. Use the [global gitignore](#global-gitignore) approach above to keep all agentkit files out of every repo automatically.
+
+**Is my JIRA API token safe?**
+Yes — the token is never stored in files. It's read from the `JIRA_API_TOKEN` environment variable at runtime. The config file (`.ai/jira-config.yaml`) only stores your base URL and email, both of which are non-sensitive.
 
 **Can I customise the installed agents?**
 Yes — edit any file in `.github/agents/`. `agentkit sync` will detect your changes and skip those files unless you pass `--force`.
@@ -384,4 +467,4 @@ Binaries are published for every release:
 
 See [Releases](https://github.com/JkhatriInfobox/agents/releases) for all versions.
 
-**Latest: [v0.1.7](https://github.com/JkhatriInfobox/agents/releases/tag/v0.1.7)** — Pack-first install + all 5 domain packs
+**Latest: [v0.1.7](https://github.com/JkhatriInfobox/agents/releases/tag/v0.1.7)** — Pack-first install + all 5 domain packs + JIRA integration
