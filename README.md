@@ -55,6 +55,49 @@ Open VS Code or Claude Code — agents are ready in `.github/agents/`.
 
 ---
 
+## Migrating from `make seed`
+
+If you set up agentkit using the older `make seed` method, migrate to the current binary in one command:
+
+```bash
+# Preview what will change (safe — no writes)
+agentkit migrate --dry-run
+
+# Migrate and install the right pack for your project
+agentkit migrate --pack go-development
+agentkit migrate --pack terraform-provider
+agentkit migrate --pack ansible-collection
+agentkit migrate --pack python-automation
+agentkit migrate --pack jira-integration
+
+# Just core agents (no domain pack)
+agentkit migrate
+
+# Non-interactive (CI / scripted use)
+agentkit migrate --pack go-development --yes
+```
+
+### What migrate does
+
+1. **Shows** what old tooling will be removed and what memory is protected
+2. **Asks for confirmation** (skip with `--yes`)
+3. **Removes** old compiled files: `.github/agents/`, `.github/skills/`, `.github/hooks/`, `.github/prompts/`, `AGENTS.md`, `CLAUDE.md`
+4. **Preserves** all agent memory and project intelligence — `.ai/` is never touched
+5. **Installs** fresh tooling via `agentkit init`
+
+### Memory is always preserved
+
+```
+.ai/
+  memory/      ← ✅ KEPT — agent learnings (developer.md, architect.md …)
+  repository/  ← ✅ KEPT — project intelligence (file map, tech stack, deps)
+  standards/   ← ✅ KEPT — coding conventions the agent learned
+  patterns/    ← ✅ KEPT — codebase patterns
+  decisions/   ← ✅ KEPT — ADRs and architectural decisions
+```
+
+---
+
 ## Domain Packs
 
 Domain packs install everything you need for a specific technology: core agents + domain-specific agents, skills, and hooks — in a single command.
@@ -157,7 +200,7 @@ jira:
 ### Developer handoff workflow
 
 ```
-1. [jira-agent]  Load PROJ-123 — formats full ticket context (description, ACs, comments, epic)
+1. [jira-agent]  Load PROJ-123 — formats full context (description, ACs, comments, epic)
 2. [jira-agent]  Hand off to developer
 3. [developer]   Implement the work
 4. [jira-agent]  Move to In Review + post comment   (asks approval)
@@ -286,6 +329,17 @@ agentkit init --user                       # install to user profile (~/.agentki
 agentkit init --project /path/to/repo      # install into a specific project path
 ```
 
+### `agentkit migrate`
+Migrate a project from the old `make seed` setup to agentkit. Removes old compiled tooling, preserves all `.ai/` memory, then installs fresh via `agentkit init`.
+
+```bash
+agentkit migrate                           # migrate + install core
+agentkit migrate --pack go-development     # migrate + install Go pack
+agentkit migrate --pack jira-integration   # migrate + add JIRA
+agentkit migrate --dry-run                 # preview what would change (no writes)
+agentkit migrate --yes                     # skip confirmation prompt
+```
+
 ### `agentkit sync`
 Update installed files when a new version of agentkit is available. Skips files you've modified locally.
 
@@ -308,6 +362,22 @@ Show all available domain packs and bundles.
 
 ```bash
 agentkit list
+```
+
+Output:
+```
+Domain Packs (install with --pack):
+  go-development      Go services, CLIs, scripts
+  terraform-provider  Terraform provider development
+  ansible-collection  Ansible modules, plugins, collections
+  python-automation   Python scripts, CLIs, automation tools
+  jira-integration    JIRA ticket management with write-gated permission model
+  oss-maintenance     Open-source project maintenance
+
+Utility Bundles (install with --bundle):
+  core        developer, reviewer, architect, docs-writer
+  testing     test-runner + pytest skill
+  ...
 ```
 
 ### `agentkit intel`
@@ -412,21 +482,25 @@ If you prefer per-repo ignoring, append the same block to the project's `.gitign
 ## Typical Workflow
 
 ```bash
-# 1. One-time: set up global gitignore (see above)
+# 1. One-time: set up global gitignore
 git config --global core.excludesfile ~/.gitignore_global
 
-# 2. New project with JIRA + Go
+# 2. Migrate existing project from make seed (if applicable)
+cd ~/my-project
+agentkit migrate --pack go-development
+
+# 3. New project with JIRA + Go
 cd ~/my-go-project
 agentkit init --pack go-development
 agentkit init --pack jira-integration
 export JIRA_API_TOKEN=your_token
 
-# 3. Daily: load a JIRA ticket and start work
+# 4. Daily: load a JIRA ticket and start work
 # [jira-agent] Show PROJ-123 and hand off to developer
 # [developer]  <implements the work>
 # [jira-agent] Move PROJ-123 to In Review and log 3h
 
-# 4. When new agentkit version is released
+# 5. When new agentkit version is released
 agentkit sync
 ```
 
@@ -442,6 +516,9 @@ No. The binary is fully self-contained.
 
 **Does this modify my `.gitignore`?**
 No. agentkit never touches your `.gitignore`. Use the [global gitignore](#global-gitignore) approach above to keep all agentkit files out of every repo automatically.
+
+**Will `agentkit migrate` delete my agent memory?**
+No. `migrate` only removes compiled tooling files. Everything in `.ai/` (memory, standards, patterns, decisions, repository intelligence) is preserved. Run `agentkit migrate --dry-run` first to see exactly what will change.
 
 **Is my JIRA API token safe?**
 Yes — the token is never stored in files. It's read from the `JIRA_API_TOKEN` environment variable at runtime. The config file (`.ai/jira-config.yaml`) only stores your base URL and email, both of which are non-sensitive.
