@@ -287,24 +287,66 @@ agentkit sync --user    # update
 
 ---
 
+## Global `.gitignore`
+
+agentkit installs local developer tooling — agents, skills, hooks, and project intelligence — that is personal to your machine and should **not** be committed to your repositories.
+
+The recommended approach is a **global gitignore** so you never accidentally commit these files from any project:
+
+```bash
+# 1. Create (or open) your global gitignore
+touch ~/.gitignore_global
+
+# 2. Tell git to use it (one-time setup)
+git config --global core.excludesfile ~/.gitignore_global
+```
+
+Add the following to `~/.gitignore_global`:
+
+```gitignore
+# AgentForge / agentkit — local developer tooling (never commit)
+.agentkit/
+.ai/
+.forge/
+.claude/
+.github/agents/
+.github/skills/
+.github/hooks/
+.github/prompts/
+.github/instructions/
+.github/copilot-instructions.md
+.vscode/mcp.json
+AGENTS.md
+```
+
+> **Why global instead of per-repo?**
+> These files are your personal AI tooling overlay — not part of the project's source code. A global gitignore keeps every repo clean without requiring every contributor to add the same entries to every `.gitignore`.
+
+If you prefer per-repo ignoring, append the same block to the project's `.gitignore` file instead.
+
+---
+
 ## Typical Workflow
 
 ```bash
-# 1. New Go project setup (once)
+# 1. One-time: set up global gitignore (see above)
+git config --global core.excludesfile ~/.gitignore_global
+
+# 2. New Go project setup
 cd ~/my-go-project
 agentkit init --pack go-development
 
-# 2. New Terraform provider project
+# 3. New Terraform provider project
 cd ~/my-tf-provider
 agentkit init --pack terraform-provider
 
-# 3. Daily use — open VS Code, select [developer] agent, start coding
+# 4. Daily use — open VS Code, select [developer] agent, start coding
 # Agents are in .github/agents/ — Copilot picks them up automatically
 
-# 4. When new agentkit version is released
+# 5. When new agentkit version is released
 agentkit sync
 
-# 5. After git clean or if something looks wrong
+# 6. After git clean or if something looks wrong
 agentkit doctor
 ```
 
@@ -319,7 +361,7 @@ No. The binary is fully self-contained.
 `--pack` is the recommended way to get started — it installs core + a complete domain-specific setup. `--bundle` is for advanced use when you want fine-grained control over exactly which components are installed.
 
 **Does this modify my `.gitignore`?**
-No. Add `.agentkit/` to your `.gitignore` manually if you don't want the lockfile committed.
+No. agentkit never touches your `.gitignore`. Use the [global gitignore](#global-gitignore) approach above to keep all agentkit files out of every repo automatically.
 
 **Can I customise the installed agents?**
 Yes — edit any file in `.github/agents/`. `agentkit sync` will detect your changes and skip those files unless you pass `--force`.
