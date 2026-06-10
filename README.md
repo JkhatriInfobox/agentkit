@@ -11,19 +11,19 @@ Works with **GitHub Copilot** (VS Code) and **Claude** (Claude Code / Claude Des
 ### macOS
 ```bash
 curl -fsSL -o agentkit \
-  https://github.com/JkhatriInfobox/agentkit/releases/latest/download/agentkit-macos-arm64 \
+  https://github.com/JkhatriInfobox/agents/releases/latest/download/agentkit-macos-arm64 \
   && chmod +x agentkit && sudo mv agentkit /usr/local/bin/
 ```
 
 ### Linux
 ```bash
 curl -fsSL -o agentkit \
-  https://github.com/JkhatriInfobox/agentkit/releases/latest/download/agentkit-linux-amd64 \
+  https://github.com/JkhatriInfobox/agents/releases/latest/download/agentkit-linux-amd64 \
   && chmod +x agentkit && sudo mv agentkit /usr/local/bin/
 ```
 
 ### Windows
-Download [`agentkit-windows-amd64.exe`](https://github.com/JkhatriInfobox/agentkit/releases/latest) from the latest release and add it to your PATH.
+Download [`agentkit-windows-amd64.exe`](https://github.com/JkhatriInfobox/agents/releases/latest) from the latest release and add it to your PATH.
 
 > No Python or pip required. The binary is self-contained.
 
@@ -42,17 +42,43 @@ cd ~/my-project
 # Install core agents (developer, reviewer, architect, docs-writer)
 agentkit init
 
+# Or install a domain pack — core is included automatically
+agentkit init --pack go-development
+agentkit init --pack terraform-provider
+agentkit init --pack ansible-collection
+agentkit init --pack python-automation
+
 # Verify everything installed cleanly
 agentkit doctor
 ```
 
-That's it. Open VS Code or Claude Code — agents are ready in `.github/agents/`.
+Open VS Code or Claude Code — agents are ready in `.github/agents/`.
+
+---
+
+## Domain Packs
+
+Domain packs install everything you need for a specific technology: core agents + domain-specific agents, skills, and hooks — in a single command.
+
+```bash
+agentkit init --pack <name>
+```
+
+| Pack | Use for | Skills included | Domain hooks |
+|------|---------|-----------------|--------------|
+| `go-development` | Go services, CLIs, scripts | foundation, service-dev, CLI, scripting, testing, code-review | go-fmt, go-vet |
+| `terraform-provider` | Terraform provider development | provider-dev, resource, data-source, docs, acceptance-testing, advanced-types, provider-client | terraform-fmt |
+| `ansible-collection` | Ansible modules, plugins, collections | foundation, modules, module-utils, lookup, filter, callback, inventory, integration-testing, docs, maintenance, regression-audit | ansible-lint, yaml-lint |
+| `python-automation` | Python scripts, CLIs, automation tools | scripting, testing | coverage-check, lint-gate, diff-size-guard |
+| `oss-maintenance` | Open-source project maintenance | oss-specific skills | — |
+
+Each pack automatically includes `core` (developer, reviewer, architect, docs-writer, hooks, prompts). You do not need to install core separately.
 
 ---
 
 ## What Gets Installed
 
-`agentkit init` installs files into your project:
+`agentkit init` (core) installs files into your project:
 
 ```
 .github/
@@ -82,6 +108,8 @@ AGENTS.md          ← Always-on Python dev conventions
 .ai/
   repository/      ← Auto-generated project intelligence
 ```
+
+Domain packs additionally install agent variants (e.g. `developer.agent.md` with Go/Terraform knowledge injected) and domain skills under `.github/skills/`.
 
 ---
 
@@ -130,13 +158,14 @@ Bundles are groups of related agents, skills, and hooks. Install only what you n
 | `oss-maintenance` | oss-maintainer, oss-triager, release-manager | Open source projects |
 
 ```bash
-# Install a single bundle
-agentkit init --bundle core
+# Install a domain pack (recommended — includes core automatically)
+agentkit init --pack go-development
 
-# Install multiple bundles at once
+# Or install individual bundles
+agentkit init --bundle core
 agentkit init --bundle core,testing,oss-maintenance
 
-# See all bundles and their contents
+# See all packs and bundles
 agentkit list
 ```
 
@@ -149,11 +178,14 @@ Install agents and supporting files into your project.
 
 ```bash
 agentkit init                              # install core bundle (default)
-agentkit init --bundle core,testing       # install multiple bundles
-agentkit init --bundle oss-maintenance    # add OSS agents to existing install
-agentkit init --force                     # overwrite locally modified files
-agentkit init --user                      # install to user profile (~/.agentkit/)
-agentkit init --project /path/to/repo     # install into a specific project path
+agentkit init --pack go-development        # install Go domain pack (includes core)
+agentkit init --pack terraform-provider    # install Terraform domain pack
+agentkit init --pack ansible-collection    # install Ansible domain pack
+agentkit init --pack python-automation     # install Python domain pack
+agentkit init --bundle core,testing        # install specific bundles
+agentkit init --force                      # overwrite locally modified files
+agentkit init --user                       # install to user profile (~/.agentkit/)
+agentkit init --project /path/to/repo      # install into a specific project path
 ```
 
 ### `agentkit sync`
@@ -166,37 +198,43 @@ agentkit sync --user    # sync user-profile install
 ```
 
 ### `agentkit doctor`
-Verify all installed files are intact and match the expected checksums. Run this after `git clean` or if something feels off.
+Verify all installed files are intact and match the expected checksums.
 
 ```bash
 agentkit doctor         # check workspace install
 agentkit doctor --user  # check user-profile install
 ```
 
-Output:
-```
-agentkit doctor — 18 file(s) tracked
-✓ 18 file(s) clean
-All files clean.
-```
-
 ### `agentkit list`
-Show all available bundles and the files each one installs.
+Show all available domain packs and bundles.
 
 ```bash
 agentkit list
 ```
 
+Output:
+```
+Domain Packs (install with --pack):
+  go-development      Go services, CLIs, scripts
+  terraform-provider  Terraform provider development
+  ansible-collection  Ansible modules, plugins, collections
+  python-automation   Python scripts, CLIs, automation tools
+  oss-maintenance     Open-source project maintenance
+
+Utility Bundles (install with --bundle):
+  core        developer, reviewer, architect, docs-writer
+  testing     test-runner + pytest skill
+  ...
+```
+
 ### `agentkit intel`
-Generate and manage `.ai/repository/` — auto-generated intelligence about your codebase (file inventory, tech stack, dependencies, test coverage, ownership).
+Generate and manage `.ai/repository/` — auto-generated intelligence about your codebase.
 
 ```bash
 agentkit intel build    # full rebuild of all inventories
 agentkit intel refresh  # fast refresh (file/tech/deps only)
 agentkit intel verify   # check inventories are fresh (exits 1 if stale)
 ```
-
-Intel runs automatically after `agentkit init`. Agents use `.ai/repository/` to understand your project without re-scanning every time.
 
 ### `agentkit update`
 Upgrade agentkit itself from the source repository.
@@ -233,6 +271,8 @@ Hooks run automatically during agent sessions:
 | `intel-refresh` | After source file edits | Refresh `.ai/repository/` intelligence |
 | `wiki-audit-flag` | After source edits | Flag that architect wiki review is needed |
 
+Domain packs add additional hooks (e.g. `go-fmt`, `terraform-fmt`, `ansible-lint`).
+
 ---
 
 ## User Profile Install
@@ -250,17 +290,21 @@ agentkit sync --user    # update
 ## Typical Workflow
 
 ```bash
-# 1. New project setup (once)
-cd ~/my-project
-agentkit init --bundle core,testing
+# 1. New Go project setup (once)
+cd ~/my-go-project
+agentkit init --pack go-development
 
-# 2. Daily use — open VS Code, select [developer] agent, start coding
+# 2. New Terraform provider project
+cd ~/my-tf-provider
+agentkit init --pack terraform-provider
+
+# 3. Daily use — open VS Code, select [developer] agent, start coding
 # Agents are in .github/agents/ — Copilot picks them up automatically
 
-# 3. When new agentkit version is released
+# 4. When new agentkit version is released
 agentkit sync
 
-# 4. After git clean or if something looks wrong
+# 5. After git clean or if something looks wrong
 agentkit doctor
 ```
 
@@ -271,17 +315,20 @@ agentkit doctor
 **Do I need Python or pip?**
 No. The binary is fully self-contained.
 
+**What's the difference between `--pack` and `--bundle`?**
+`--pack` is the recommended way to get started — it installs core + a complete domain-specific setup. `--bundle` is for advanced use when you want fine-grained control over exactly which components are installed.
+
 **Does this modify my `.gitignore`?**
-No. Add `.agentkit/` to your `.gitignore` manually if you don't want the lockfile committed, or use a global gitignore.
+No. Add `.agentkit/` to your `.gitignore` manually if you don't want the lockfile committed.
 
 **Can I customise the installed agents?**
 Yes — edit any file in `.github/agents/`. `agentkit sync` will detect your changes and skip those files unless you pass `--force`.
 
 **What is `.agentkit/installed.json`?**
-The lockfile — tracks what was installed and the checksum of each file. Used by `sync` and `doctor`. Safe to commit or ignore.
+The lockfile — tracks what was installed and the checksum of each file. Used by `sync` and `doctor`.
 
 **What is `.ai/repository/`?**
-Auto-generated project intelligence — file inventory, tech stack, dependency map, test coverage summary, ownership info. Generated by `agentkit intel build` and refreshed automatically by the `intel-refresh` hook on every file edit.
+Auto-generated project intelligence — file inventory, tech stack, dependency map, test coverage summary, ownership info. Generated by `agentkit intel build` and refreshed automatically by the `intel-refresh` hook.
 
 ---
 
@@ -293,4 +340,6 @@ Binaries are published for every release:
 - `agentkit-linux-amd64` — Linux x86_64
 - `agentkit-windows-amd64.exe` — Windows x86_64
 
-See [Releases](https://github.com/JkhatriInfobox/agentkit/releases) for all versions.
+See [Releases](https://github.com/JkhatriInfobox/agents/releases) for all versions.
+
+**Latest: [v0.1.7](https://github.com/JkhatriInfobox/agents/releases/tag/v0.1.7)** — Pack-first install + all 5 domain packs
