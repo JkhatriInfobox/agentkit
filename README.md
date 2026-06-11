@@ -556,4 +556,4 @@ Binaries are published for every release:
 
 See [Releases](https://github.com/JkhatriInfobox/agentkit/releases) for all versions.
 
-**Latest: [v0.1.11](https://github.com/JkhatriInfobox/agentkit/releases/tag/v0.1.11)** — manifest bundle fixes (`go-development`, `jira-integration` packs now fully installable), version reporting fix, reviewer read-only enforcement
+**Latest: [v0.1.12](https://github.com/JkhatriInfobox/agentkit/releases/tag/v0.1.12)** — `release_helper.py release-notes` command, docs completeness pass, automated public repo update checklist
