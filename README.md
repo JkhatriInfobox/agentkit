@@ -1,3 +1,4 @@
+
 # agentkit
 
 > AI Engineering Platform CLI — install governed agents, skills, hooks, and coding standards into any project in seconds.
@@ -263,8 +264,8 @@ Select an agent from the `[Agent ▼]` dropdown in VS Code Copilot chat, or use 
 | `reviewer` | Review code — finds real bugs, never style issues. **Read-only: never writes or commits.** | Read + Search + Execute (CI only) |
 | `architect` | Design systems, write ADRs, evaluate trade-offs | Read only (proposes, never implements) |
 | `docs-writer` | Write README, API docs, changelogs | Read + Write |
-| `jira-agent` | Full JIRA operations — writes require approval | Read + HTTP (write-gated) |
-| `jira-reader` | Read JIRA issues and search — no write, no approvals | Read + HTTP |
+| `jira-agent` | Full JIRA operations — writes require approval | Read + Execute + HTTP (write-gated) |
+| `jira-reader` | Read JIRA issues and search — no write, no approvals needed | Read + Execute (read-only `jira_cli.py` calls) |
 | `oss-maintainer` | Issue triage, community responses, release notes | Read + Write |
 | `oss-triager` | Classify and route incoming issues | Read only |
 | `release-manager` | Changelog, version bump, tag, publish | Read + Write + Execute |
@@ -279,6 +280,10 @@ The reviewer agent enforces a hard-stop refusal when asked to fix, commit, or wr
 > Please switch to the Developer agent to implement these changes."
 
 To apply reviewer findings: switch to the **Developer agent**, share the review output, and the developer will implement with your approval.
+
+### jira-reader — execute clarification
+
+`jira-reader` is **read-only for JIRA data** — it never creates, updates, or deletes issues. However, it **can and does** run shell commands to call `jira_cli.py` for fetching data. The `execute: ✅` capability in the agent means "I can run `jira_cli.py` to read JIRA" — not write access to JIRA.
 
 ### How to use agents in VS Code Copilot
 1. Open Copilot Chat (`Ctrl+Shift+I` / `Cmd+Shift+I`)
@@ -544,6 +549,9 @@ Auto-generated project intelligence — file inventory, tech stack, dependency m
 **Can the reviewer agent fix code?**
 No. The reviewer is strictly read-only and enforces a hard-stop refusal when asked to write or commit. Switch to the Developer agent to apply reviewer findings.
 
+**Can jira-reader run shell commands?**
+Yes — `jira-reader` uses `jira_cli.py` to fetch JIRA data. "Read-only" means it never mutates JIRA (no creates, updates, or deletes). It can and does run `jira_cli.py` commands to search and read issues.
+
 ---
 
 ## Releases
@@ -556,4 +564,4 @@ Binaries are published for every release:
 
 See [Releases](https://github.com/JkhatriInfobox/agentkit/releases) for all versions.
 
-**Latest: [v0.1.12](https://github.com/JkhatriInfobox/agentkit/releases/tag/v0.1.12)** — `release_helper.py release-notes` command, docs completeness pass, automated public repo update checklist
+**Latest: [v0.1.13](https://github.com/JkhatriInfobox/agentkit/releases/tag/v0.1.13)** — jira-reader execute fix, jira agent startup instructions, CI Node 24 upgrade
