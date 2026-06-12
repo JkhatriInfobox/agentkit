@@ -4,6 +4,8 @@
 
 Works with **GitHub Copilot** (VS Code) and **Claude** (Claude Code / Claude Desktop).
 
+**Latest: [v0.2.0](https://github.com/JkhatriInfobox/agentkit/releases/tag/v0.2.0)** — D-15 Single-Agent Architecture, migration tooling, governance mode routing
+
 ---
 
 ## Install
@@ -39,7 +41,7 @@ agentkit --version
 ```bash
 cd ~/my-project
 
-# Install core agents (developer, reviewer, architect, docs-writer)
+# Install core agents + governance
 agentkit init
 
 # Or install a domain pack — core is included automatically
@@ -57,16 +59,75 @@ Open VS Code or Claude Code — agents are ready in `.github/agents/`.
 
 ## Upgrading
 
-Two-step upgrade — the binary first, then the agent files in each project:
+### Standard upgrade (all users)
+
+Two-step upgrade — the binary first, then agent files in each project:
 
 ```bash
-# Step 1: upgrade the agentkit binary (detects your platform automatically)
+# Step 1: upgrade the agentkit binary
 agentkit self-update
 
 # Step 2: refresh agent files in each project
 cd ~/my-project
 agentkit sync
 ```
+
+### Upgrading to v0.2.0 — D-15 Single-Agent Architecture
+
+v0.2.0 includes a **breaking change**: the four separate governance agents (`developer`, `reviewer`, `architect`, `platform-engineer`) are consolidated into a single `agentforge` agent with `mode:` routing.
+
+**What changed in workflow YAML files:**
+
+| Before (pre-v0.2.0) | After (v0.2.0+) |
+|---------------------|-----------------|
+| `agent: reviewer` | `agent: agentforge` + `mode: reviewer` |
+| `agent: developer` | `agent: agentforge` + `mode: developer` |
+| `agent: architect` | `agent: agentforge` + `mode: architect` |
+| `agent: platform-engineer` | `agent: agentforge` + `mode: platform-engineer` |
+| `agent_profiles:` in pack.yaml | `mode_profiles:` |
+
+**Migrate automatically after `agentkit self-update && agentkit sync`:**
+
+```bash
+# 1. Check if your repo has legacy syntax
+forge doctor --check-legacy
+
+# 2. Preview what will change (read-only, no writes)
+forge migrate d15 analyze
+
+# 3. Apply the migration (backup created automatically at .forge/migrate-d15-backup-*.tar.gz)
+forge migrate d15 apply
+
+# 4. Undo if needed
+forge migrate d15 rollback
+
+# 5. Recompile artifacts
+forge compile --source . --target .
+```
+
+**Before / after example:**
+
+```yaml
+# Before (pre-v0.2.0)
+steps:
+  - name: review
+    agent: reviewer
+  - name: implement
+    agent: developer
+
+# After (v0.2.0+)
+steps:
+  - name: review
+    agent: agentforge
+    mode: reviewer
+  - name: implement
+    agent: agentforge
+    mode: developer
+```
+
+> **Specialist agents are unchanged** — `jira-agent`, `oss-agent`, `docs-writer`, `release-manager` are not affected and continue to work as-is.
+
+Full upgrade guide: [docs/upgrade-guide.md](https://github.com/JkhatriInfobox/agents/blob/main/docs/upgrade-guide.md)
 
 ---
 
@@ -185,31 +246,6 @@ export JIRA_API_TOKEN=your_token_here
 # Update and log
 [jira-agent] Move PROJ-123 to In Review and post a comment that the PR is ready
 [jira-agent] Log 2h 30m on PROJ-123 for implementing the refresh token logic
-
-# Custom fields
-[jira-agent] What custom fields does our project use? Show values from PROJ-1
-[jira-agent] Set story points on PROJ-123 to 5
-```
-
-### Custom fields
-
-On first use, the agent can discover all custom fields in your JIRA project:
-
-```
-[jira-agent] Discover custom fields on PROJ-1 and help me map them to config
-```
-
-The agent fetches all fields, shows which ones have values, and asks which you want to map. Approved mappings are saved to `.ai/jira-config.yaml`:
-
-```yaml
-jira:
-  base_url: https://your-org.atlassian.net
-  email: you@example.com
-  default_project: PROJ
-  custom_fields:
-    story_points: customfield_10016
-    sprint: customfield_10020
-    acceptance_criteria: customfield_10034
 ```
 
 ### Developer handoff workflow
@@ -224,11 +260,6 @@ jira:
 7. [jira-agent]  Move to Done                       (asks approval)
 ```
 
-### Two agents installed
-
-- **`jira-agent`** — full operations: read + write (with approval gate)
-- **`jira-reader`** — read-only: search, view tickets, check worklogs, discover fields — no approval prompts ever
-
 ---
 
 ## What Gets Installed
@@ -238,6 +269,7 @@ jira:
 ```
 .github/
   agents/          ← AI agents (use in VS Code Copilot / Claude Code)
+    agentforge.agent.md   ← single governance agent (developer/reviewer/architect/platform modes)
     developer.agent.md
     reviewer.agent.md
     architect.agent.md
@@ -264,62 +296,63 @@ AGENTS.md          ← Always-on Python dev conventions
   repository/      ← Auto-generated project intelligence
 ```
 
-Domain packs additionally install agent variants and domain skills under `.github/skills/`. The `jira-integration` pack also installs `.ai/jira-config.yaml`.
-
 ---
 
 ## Agents
 
 Select an agent from the `[Agent ▼]` dropdown in VS Code Copilot chat, or use `@agent-name` in Claude Code.
 
+### Primary governance agent (v0.2.0+)
+
+The `agentforge` agent routes internally to the right mode based on your request. You can also set the mode explicitly in workflow YAML or via the `AGENTFORGE_MODE` env var.
+
+| Agent | Mode | Role | Capabilities |
+|-------|------|------|-------------|
+| `agentforge` | `developer` | Implement features and fix bugs | Read + Write + Execute |
+| `agentforge` | `reviewer` | Review code — finds real bugs, never style issues. **Read-only: never writes or commits.** | Read + Search + Execute (CI only) |
+| `agentforge` | `architect` | Design systems, write ADRs, evaluate trade-offs | Read only (proposes, never implements) |
+| `agentforge` | `platform-engineer` | Build and maintain the AgentForge platform | Read + Write + Execute |
+
+```yaml
+# Explicit mode in a workflow step
+agent: agentforge
+mode: reviewer
+
+# Or via environment variable
+export AGENTFORGE_MODE=developer
+```
+
+### Specialist agents (unchanged in v0.2.0)
+
 | Agent | Role | Capabilities |
 |-------|------|-------------|
-| `developer` | Implement features and fix bugs | Read + Write + Execute |
-| `reviewer` | Review code — finds real bugs, never style issues. **Read-only: never writes or commits.** | Read + Search + Execute (CI only) |
-| `architect` | Design systems, write ADRs, evaluate trade-offs | Read only (proposes, never implements) |
-| `docs-writer` | Write README, API docs, changelogs | Read + Write |
 | `jira-agent` | Full JIRA operations — writes require approval | Read + Execute + HTTP (write-gated) |
-| `jira-reader` | Read JIRA issues and search — no write, no approvals needed | Read + Execute (read-only `jira_cli.py` calls) |
+| `jira-reader` | Read JIRA issues and search — no write, no approvals needed | Read + Execute (read-only) |
 | `oss-maintainer` | Issue triage, community responses, release notes | Read + Write |
 | `oss-triager` | Classify and route incoming issues | Read only |
 | `release-manager` | Changelog, version bump, tag, publish | Read + Write + Execute |
-| `test-runner` | Run and fix pytest suites | Read + Execute |
-| `script-writer` | Write automation scripts | Read + Write + Execute |
+| `docs-writer` | Write README, API docs, changelogs | Read + Write |
 
-### Reviewer — read-only enforcement
-
-The reviewer agent enforces a hard-stop refusal when asked to fix, commit, or write code:
-
-> "I am the Reviewer agent — read-only. I find issues; I do not fix them.
-> Please switch to the Developer agent to implement these changes."
-
-To apply reviewer findings: switch to the **Developer agent**, share the review output, and the developer will implement with your approval.
-
-### jira-reader — execute clarification
-
-`jira-reader` is **read-only for JIRA data** — it never creates, updates, or deletes issues. However, it **can and does** run shell commands to call `jira_cli.py` for fetching data. The `execute: ✅` capability means "I can run `jira_cli.py` to read JIRA" — not write access to JIRA.
-
-### How to use agents in VS Code Copilot
+### How to use in VS Code Copilot
 1. Open Copilot Chat (`Ctrl+Shift+I` / `Cmd+Shift+I`)
-2. Click `[Agent ▼]` dropdown → select an agent
-3. Type your request
+2. Click `[Agent ▼]` dropdown → select `agentforge` (or a specialist agent)
+3. Type your request — governance mode is routed automatically
 
-### How to use agents in Claude Code
+### How to use in Claude Code
 ```
+[agentforge] Implement the login endpoint with JWT auth
+[agentforge] Review my changes in src/api.py
 [jira-agent] Show me PROJ-123 and format it for development
-[developer] Add input validation to the login endpoint
-[reviewer] Review my changes in src/api.py
+[docs-writer] Update the README with the new API endpoints
 ```
 
 ---
 
 ## Bundles
 
-Bundles are groups of related agents, skills, and hooks. Install only what you need.
-
 | Bundle | Contents | Use when |
 |--------|----------|----------|
-| `core` | developer, reviewer, architect, docs-writer, hooks, prompts | Every project (default) |
+| `core` | agentforge, specialist agents, hooks, prompts | Every project (default) |
 | `testing` | test-runner agent, pytest skill, testing instructions | Python projects with tests |
 | `packaging` | release-manager agent, Python packaging skill | Libraries / packages |
 | `scripting` | script-writer agent, debugging skill | Automation / scripts |
@@ -328,15 +361,9 @@ Bundles are groups of related agents, skills, and hooks. Install only what you n
 | `oss-maintenance` | oss-maintainer, oss-triager, release-manager + 8 oss skills | Open source projects |
 
 ```bash
-# Install a domain pack (recommended — includes core automatically)
-agentkit init --pack go-development
-
-# Or install individual bundles
-agentkit init --bundle core
-agentkit init --bundle core,testing,oss-maintenance
-
-# See all packs and bundles
-agentkit list
+agentkit init --pack go-development        # recommended — includes core
+agentkit init --bundle core,testing        # fine-grained bundle install
+agentkit list                              # see all packs and bundles
 ```
 
 ---
@@ -344,12 +371,9 @@ agentkit list
 ## Commands
 
 ### `agentkit init`
-Install agents and supporting files into your project.
-
 ```bash
 agentkit init                              # install core bundle (default)
 agentkit init --pack go-development        # install Go domain pack (includes core)
-agentkit init --pack terraform-provider    # install Terraform domain pack
 agentkit init --pack jira-integration      # install JIRA integration pack
 agentkit init --bundle core,testing        # install specific bundles
 agentkit init --force                      # overwrite locally modified files
@@ -358,61 +382,41 @@ agentkit init --project /path/to/repo      # install into a specific project pat
 ```
 
 ### `agentkit self-update`
-Upgrade the agentkit binary itself — detects your platform and downloads the latest release automatically.
-
 ```bash
-agentkit self-update              # download latest and replace binary
-agentkit self-update --version v0.1.14  # pin to a specific version
-agentkit self-update --yes        # skip confirmation
-```
-
-> This is the recommended upgrade path for users who installed via `curl`. After upgrading, run `agentkit sync` in each project to refresh agent files.
-
-### `agentkit update`
-Upgrade agentkit via pip (pip-installed users only).
-
-```bash
-agentkit update
-```
-
-### `agentkit migrate`
-Migrate a project from the old `make seed` setup to agentkit. Removes old compiled tooling, preserves all `.ai/` memory, then installs fresh via `agentkit init`.
-
-```bash
-agentkit migrate                           # migrate + install core
-agentkit migrate --pack go-development     # migrate + install Go pack
-agentkit migrate --pack jira-integration   # migrate + add JIRA
-agentkit migrate --dry-run                 # preview what would change (no writes)
-agentkit migrate --yes                     # skip confirmation prompt
+agentkit self-update                       # download latest and replace binary
+agentkit self-update --version v0.2.0      # pin to a specific version
+agentkit self-update --yes                 # skip confirmation
 ```
 
 ### `agentkit sync`
-Update installed files when a new version of agentkit is available. Skips files you've modified locally.
-
 ```bash
-agentkit sync           # update all installed files (safe — skips local edits)
+agentkit sync           # update installed files (safe — skips local edits)
 agentkit sync --force   # overwrite even locally modified files
 agentkit sync --user    # sync user-profile install
 ```
 
 ### `agentkit doctor`
-Verify all installed files are intact and match the expected checksums.
-
 ```bash
 agentkit doctor         # check workspace install
 agentkit doctor --user  # check user-profile install
 ```
 
-### `agentkit list`
-Show all available domain packs and bundles.
-
+### `agentkit migrate`
 ```bash
-agentkit list
+agentkit migrate --pack go-development     # migrate from make seed + install Go pack
+agentkit migrate --dry-run                 # preview only (no writes)
+agentkit migrate --yes                     # skip confirmation
+```
+
+### `forge migrate d15` — workflow syntax migration (v0.2.0+)
+```bash
+forge doctor --check-legacy        # detect legacy governance agent syntax
+forge migrate d15 analyze          # count and list affected files (read-only)
+forge migrate d15 apply            # rewrite files in place (backup created)
+forge migrate d15 rollback         # restore from backup
 ```
 
 ### `agentkit intel`
-Generate and manage `.ai/repository/` — auto-generated intelligence about your codebase.
-
 ```bash
 agentkit intel build    # full rebuild of all inventories
 agentkit intel refresh  # fast refresh (file/tech/deps only)
@@ -422,8 +426,6 @@ agentkit intel verify   # check inventories are fresh (exits 1 if stale)
 ---
 
 ## Prompts (Slash Commands)
-
-After `agentkit init`, these prompts are available in VS Code Copilot via `/` in chat:
 
 | Prompt | Command | Use |
 |--------|---------|-----|
@@ -437,8 +439,6 @@ After `agentkit init`, these prompts are available in VS Code Copilot via `/` in
 
 ## Hooks
 
-Hooks run automatically during agent sessions:
-
 | Hook | Trigger | Action |
 |------|---------|--------|
 | `ruff-format` | After every `.py` edit | Auto-format with ruff |
@@ -446,6 +446,7 @@ Hooks run automatically during agent sessions:
 | `block-dangerous` | Before shell commands | Block `rm -rf`, `format`, etc. |
 | `intel-refresh` | After source file edits | Refresh `.ai/repository/` intelligence |
 | `wiki-audit-flag` | After source edits | Flag that architect wiki review is needed |
+| `mode-guard` | PreToolUse (governance) | Enforce read-only for reviewer/architect modes |
 
 Domain packs add additional hooks (e.g. `go-fmt`, `terraform-fmt`, `ansible-lint`).
 
@@ -465,19 +466,14 @@ agentkit sync --user    # update
 
 ## Global `.gitignore`
 
-agentkit installs local developer tooling — agents, skills, hooks, and project intelligence — that is personal to your machine and should **not** be committed to your repositories.
-
-The recommended approach is a **global gitignore** so you never accidentally commit these files from any project:
+agentkit installs local developer tooling that should **not** be committed to your repositories. Use a global gitignore:
 
 ```bash
-# 1. Create (or open) your global gitignore
 touch ~/.gitignore_global
-
-# 2. Tell git to use it (one-time setup)
 git config --global core.excludesfile ~/.gitignore_global
 ```
 
-Add the following to `~/.gitignore_global`:
+Add to `~/.gitignore_global`:
 
 ```gitignore
 # AgentForge / agentkit — local developer tooling (never commit)
@@ -495,11 +491,6 @@ Add the following to `~/.gitignore_global`:
 AGENTS.md
 ```
 
-> **Why global instead of per-repo?**
-> These files are your personal AI tooling overlay — not part of the project's source code. A global gitignore keeps every repo clean without requiring every contributor to add the same entries to every `.gitignore`.
-
-If you prefer per-repo ignoring, append the same block to the project's `.gitignore` file instead.
-
 ---
 
 ## Typical Workflow
@@ -508,24 +499,27 @@ If you prefer per-repo ignoring, append the same block to the project's `.gitign
 # 1. One-time: set up global gitignore
 git config --global core.excludesfile ~/.gitignore_global
 
-# 2. Migrate existing project from make seed (if applicable)
+# 2. New project
+cd ~/my-go-project
+agentkit init --pack go-development
+
+# 3. Migrate existing project from make seed
 cd ~/my-project
 agentkit migrate --pack go-development
 
-# 3. New project with JIRA + Go
-cd ~/my-go-project
-agentkit init --pack go-development
-agentkit init --pack jira-integration
-export JIRA_API_TOKEN=your_token
+# 4. Upgrade binary + refresh project files
+agentkit self-update
+agentkit sync
 
-# 4. Daily: load a JIRA ticket and start work
-# [jira-agent] Show PROJ-123 and hand off to developer
-# [developer]  <implements the work>
-# [jira-agent] Move PROJ-123 to In Review and log 3h
+# 5. After upgrading to v0.2.0 — migrate workflow syntax (if needed)
+forge doctor --check-legacy
+forge migrate d15 apply
+forge compile --source . --target .
 
-# 5. When new agentkit version is released
-agentkit self-update   # upgrade the binary
-agentkit sync          # refresh agent files in this project
+# 6. Daily: use agentforge for governance work
+# [agentforge] Review my changes in src/api.py
+# [agentforge] Implement the login endpoint with JWT auth
+# [jira-agent] Load PROJ-123 and hand off to developer
 ```
 
 ---
@@ -535,41 +529,41 @@ agentkit sync          # refresh agent files in this project
 **Do I need Python or pip?**
 No. The binary is fully self-contained.
 
+**What changed in v0.2.0?**
+The four governance agents (`developer`, `reviewer`, `architect`, `platform-engineer`) are merged into a single `agentforge` agent with mode routing. Specialist agents (`jira-agent`, `docs-writer`, `oss-agent`, `release-manager`) are unchanged. If you have workflow YAML files using the old syntax, run `forge migrate d15 apply` to update them automatically.
+
+**Do I need to change anything when upgrading to v0.2.0?**
+Only if you have workflow YAML files or `pack.yaml` files using governance agent names directly. Run `forge doctor --check-legacy` after upgrading — if it says clean, no action is needed.
+
 **What's the difference between `--pack` and `--bundle`?**
-`--pack` is the recommended way to get started — it installs core + a complete domain-specific setup. `--bundle` is for advanced use when you want fine-grained control over exactly which components are installed.
+`--pack` is the recommended way — installs core + a complete domain-specific setup in one command. `--bundle` is for fine-grained control over exactly which components are installed.
 
 **Does this modify my `.gitignore`?**
-No. agentkit never touches your `.gitignore`. Use the [global gitignore](#global-gitignore) approach above to keep all agentkit files out of every repo automatically.
+No. agentkit never touches your `.gitignore`. Use the global gitignore approach above.
 
 **Will `agentkit migrate` delete my agent memory?**
-No. `migrate` only removes compiled tooling files. Everything in `.ai/` (memory, standards, patterns, decisions, repository intelligence) is preserved. Run `agentkit migrate --dry-run` first to see exactly what will change.
+No. `migrate` only removes compiled tooling files. Everything in `.ai/` is preserved. Run `--dry-run` first to see exactly what changes.
 
 **Is my JIRA API token safe?**
-Yes — the token is never stored in files. It's read from the `JIRA_API_TOKEN` environment variable at runtime. The config file (`.ai/jira-config.yaml`) only stores your base URL and email, both of which are non-sensitive.
-
-**Can I customise the installed agents?**
-Yes — edit any file in `.github/agents/`. `agentkit sync` will detect your changes and skip those files unless you pass `--force`.
-
-**What is `.agentkit/installed.json`?**
-The lockfile — tracks what was installed and the checksum of each file. Used by `sync` and `doctor`.
-
-**What is `.ai/repository/`?**
-Auto-generated project intelligence — file inventory, tech stack, dependency map, test coverage summary, ownership info. Generated by `agentkit intel build` and refreshed automatically by the `intel-refresh` hook.
+Yes — read from `JIRA_API_TOKEN` env var at runtime. Never stored in files.
 
 **Can the reviewer agent fix code?**
-No. The reviewer is strictly read-only and enforces a hard-stop refusal when asked to write or commit. Switch to the Developer agent to apply reviewer findings.
+No. The reviewer enforces a hard-stop refusal when asked to write or commit. Switch to `agentforge` (developer mode) to apply findings.
 
-**Can jira-reader run shell commands?**
-Yes — `jira-reader` uses `jira_cli.py` to fetch JIRA data. "Read-only" means it never mutates JIRA (no creates, updates, or deletes). It can and does run `jira_cli.py` commands to search and read issues.
+**How do I set the agentforge governance mode explicitly?**
+In a workflow step: `mode: reviewer`. Via env var: `export AGENTFORGE_MODE=reviewer`. Or just describe your task — the agent routes automatically.
 
 **How do I upgrade agentkit?**
-Run `agentkit self-update` to download the latest binary for your platform. Then run `agentkit sync` in each project to refresh the installed agent files.
+`agentkit self-update` for the binary, then `agentkit sync` in each project.
+
+**Can I roll back the D-15 migration?**
+Yes — `forge migrate d15 apply` creates a backup at `.forge/migrate-d15-backup-*.tar.gz`. Run `forge migrate d15 rollback` to restore original files.
 
 ---
 
 ## Releases
 
-Binaries are published for every release:
+Binaries published for every release:
 
 - `agentkit-macos-arm64` — macOS Apple Silicon
 - `agentkit-linux-amd64` — Linux x86_64
@@ -577,4 +571,4 @@ Binaries are published for every release:
 
 See [Releases](https://github.com/JkhatriInfobox/agentkit/releases) for all versions.
 
-**Latest: [v0.1.13](https://github.com/JkhatriInfobox/agentkit/releases/tag/v0.1.13)** — jira-reader execute fix, jira agent startup instructions, CI Node 24 upgrade, `agentkit self-update` command
+**Latest: [v0.2.0](https://github.com/JkhatriInfobox/agentkit/releases/tag/v0.2.0)** — D-15 Single-Agent Architecture, `forge migrate d15` tooling, governance mode routing, compiler `mode_profiles` support
