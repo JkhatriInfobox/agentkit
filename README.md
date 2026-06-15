@@ -4,7 +4,7 @@
 
 Works with **GitHub Copilot** (VS Code) and **Claude** (Claude Code / Claude Desktop).
 
-**Latest: [v0.2.0](https://github.com/JkhatriInfobox/agentkit/releases/tag/v0.2.0)** — D-15 Single-Agent Architecture, migration tooling, governance mode routing
+**Latest: [v0.2.1](https://github.com/JkhatriInfobox/agentkit/releases/tag/v0.2.1)** — SSL self-update fix, version reporting fix, VS Code picker cleanup (D-15 post-release patch)
 
 ---
 
@@ -191,7 +191,7 @@ agentkit init --pack <name>
 | `jira-integration` | JIRA ticket management, creation, updates, time logging | foundation, ticket-read, ticket-create, ticket-update, comment-management, time-tracking, custom-fields | secret-guard |
 | `oss-maintenance` | Open-source project maintenance | changelog-management, issue-triage, issue-classification, bug-reproduction, release-note-generation, community-response, contributor-onboarding, roadmap-management | — |
 
-Each pack automatically includes `core` (developer, reviewer, architect, docs-writer, hooks, prompts). You do not need to install core separately.
+Each pack automatically includes `core` (`agentforge`, specialist agents, hooks, prompts). You do not need to install core separately.
 
 ---
 
@@ -251,13 +251,13 @@ export JIRA_API_TOKEN=your_token_here
 ### Developer handoff workflow
 
 ```
-1. [jira-agent]  Load PROJ-123 — formats full context (description, ACs, comments, epic)
-2. [jira-agent]  Hand off to developer
-3. [developer]   Implement the work
-4. [jira-agent]  Move to In Review + post comment   (asks approval)
-5. [jira-agent]  Log 3h work time                  (asks approval)
-6. [reviewer]    Review the diff
-7. [jira-agent]  Move to Done                       (asks approval)
+1. [jira-agent]              Load PROJ-123 — formats full context (description, ACs, comments, epic)
+2. [jira-agent]              Hand off to developer
+3. [agentforge mode:developer]  Implement the work
+4. [jira-agent]              Move to In Review + post comment   (asks approval)
+5. [jira-agent]              Log 3h work time                  (asks approval)
+6. [agentforge mode:reviewer]   Review the diff
+7. [jira-agent]              Move to Done                       (asks approval)
 ```
 
 ---
@@ -270,10 +270,10 @@ export JIRA_API_TOKEN=your_token_here
 .github/
   agents/          ← AI agents (use in VS Code Copilot / Claude Code)
     agentforge.agent.md   ← single governance agent (developer/reviewer/architect/platform modes)
-    developer.agent.md
-    reviewer.agent.md
-    architect.agent.md
     docs-writer.agent.md
+    release-manager.agent.md
+    jira-agent.agent.md
+    oss-agent.agent.md
   instructions/    ← Always-on coding standards (auto-applied by the AI)
     python-style.instructions.md
     verify-first.instructions.md
@@ -295,6 +295,8 @@ AGENTS.md          ← Always-on Python dev conventions
 .ai/
   repository/      ← Auto-generated project intelligence
 ```
+
+> **Note:** `developer.agent.md`, `reviewer.agent.md`, `architect.agent.md` are no longer installed as separate files (removed in v0.2.1). All governance is handled by `agentforge.agent.md` with mode routing.
 
 ---
 
@@ -322,7 +324,7 @@ mode: reviewer
 export AGENTFORGE_MODE=developer
 ```
 
-### Specialist agents (unchanged in v0.2.0)
+### Specialist agents
 
 | Agent | Role | Capabilities |
 |-------|------|-------------|
@@ -384,7 +386,7 @@ agentkit init --project /path/to/repo      # install into a specific project pat
 ### `agentkit self-update`
 ```bash
 agentkit self-update                       # download latest and replace binary
-agentkit self-update --version v0.2.0      # pin to a specific version
+agentkit self-update --version v0.2.1      # pin to a specific version
 agentkit self-update --yes                 # skip confirmation
 ```
 
@@ -529,11 +531,17 @@ forge compile --source . --target .
 **Do I need Python or pip?**
 No. The binary is fully self-contained.
 
+**What changed in v0.2.1?**
+Patch release with four fixes: (1) `agentkit self-update` SSL certificate failure on macOS, (2) `agentkit --version` always reporting the wrong version (`0.1.14`), (3) legacy governance agents (`developer`, `reviewer`, `architect`) appearing in the VS Code agent picker after the D-15 migration, (4) domain pack skills (e.g. Ansible skills) not being injected into `agentforge` correctly. No breaking changes — upgrade with `agentkit self-update`.
+
 **What changed in v0.2.0?**
 The four governance agents (`developer`, `reviewer`, `architect`, `platform-engineer`) are merged into a single `agentforge` agent with mode routing. Specialist agents (`jira-agent`, `docs-writer`, `oss-agent`, `release-manager`) are unchanged. If you have workflow YAML files using the old syntax, run `forge migrate d15 apply` to update them automatically.
 
 **Do I need to change anything when upgrading to v0.2.0?**
 Only if you have workflow YAML files or `pack.yaml` files using governance agent names directly. Run `forge doctor --check-legacy` after upgrading — if it says clean, no action is needed.
+
+**`agentkit self-update` fails with SSL error on macOS — what do I do?**
+Upgrade to v0.2.1 which fixes this. If you're on an older binary and can't self-update, re-run the install curl from the releases page, or install `certifi` to fix the current binary: `pip install certifi`.
 
 **What's the difference between `--pack` and `--bundle`?**
 `--pack` is the recommended way — installs core + a complete domain-specific setup in one command. `--bundle` is for fine-grained control over exactly which components are installed.
@@ -548,7 +556,7 @@ No. `migrate` only removes compiled tooling files. Everything in `.ai/` is prese
 Yes — read from `JIRA_API_TOKEN` env var at runtime. Never stored in files.
 
 **Can the reviewer agent fix code?**
-No. The reviewer enforces a hard-stop refusal when asked to write or commit. Switch to `agentforge` (developer mode) to apply findings.
+No. The reviewer mode in `agentforge` enforces a hard-stop refusal when asked to write or commit. Switch to developer mode to apply findings.
 
 **How do I set the agentforge governance mode explicitly?**
 In a workflow step: `mode: reviewer`. Via env var: `export AGENTFORGE_MODE=reviewer`. Or just describe your task — the agent routes automatically.
@@ -558,6 +566,9 @@ In a workflow step: `mode: reviewer`. Via env var: `export AGENTFORGE_MODE=revie
 
 **Can I roll back the D-15 migration?**
 Yes — `forge migrate d15 apply` creates a backup at `.forge/migrate-d15-backup-*.tar.gz`. Run `forge migrate d15 rollback` to restore original files.
+
+**I still see `developer`, `reviewer`, `architect` in my VS Code agent picker after upgrading.**
+Run `agentkit sync` in your project to pull the updated agent files. If you manage agent files manually, remove `.github/agents/developer.agent.md`, `.github/agents/reviewer.agent.md`, `.github/agents/architect.agent.md` — they are no longer part of the D-15 architecture.
 
 ---
 
@@ -571,4 +582,4 @@ Binaries published for every release:
 
 See [Releases](https://github.com/JkhatriInfobox/agentkit/releases) for all versions.
 
-**Latest: [v0.2.0](https://github.com/JkhatriInfobox/agentkit/releases/tag/v0.2.0)** — D-15 Single-Agent Architecture, `forge migrate d15` tooling, governance mode routing, compiler `mode_profiles` support
+**Latest: [v0.2.1](https://github.com/JkhatriInfobox/agentkit/releases/tag/v0.2.1)** — SSL self-update fix, version reporting fix, VS Code picker cleanup, compiler domain-skill injection fix
